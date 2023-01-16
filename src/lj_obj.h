@@ -479,6 +479,12 @@ typedef struct Node {
 
 LJ_STATIC_ASSERT(offsetof(Node, val) == 0);
 
+typedef struct {
+	Node head;
+	MRef current;
+	uint32_t size;
+} Cache;
+
 typedef struct GCtab {
   GCHeader;
   uint8_t nomm;		/* Negative cache for fast metamethods. */
@@ -486,6 +492,7 @@ typedef struct GCtab {
   MRef array;		/* Array part. */
   GCRef gclist;
   GCRef metatable;	/* Must be at same offset in GCudata. */
+  Cache* cache;
   MRef node;		/* Hash part. */
   uint32_t asize;	/* Size of array part (keys [0, asize-1]). */
   uint32_t hmask;	/* Hash part mask (size of hash part - 1). */
@@ -647,6 +654,8 @@ typedef struct global_State {
 
 /* Per-thread state object. */
 struct lua_State {
+  union {
+    struct {
   GCHeader;
   uint8_t dummy_ffid;	/* Fake FF_C for curr_funcisL() on dummy frames. */
   uint8_t status;	/* Thread status. */
@@ -660,6 +669,9 @@ struct lua_State {
   GCRef env;		/* Thread environment (table of globals). */
   void *cframe;		/* End of C stack frame chain. */
   MSize stacksize;	/* True stack size (incl. LJ_STACK_EXTRA). */
+};
+  uint8_t reserved[0x180]; /* reserve for target */
+};
 };
 
 #define G(L)			(mref(L->glref, global_State))

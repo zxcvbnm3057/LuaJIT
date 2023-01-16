@@ -142,6 +142,7 @@ static GCtab *newtab(lua_State *L, uint32_t asize, uint32_t hbits)
   }
   if (hbits)
     newhpart(L, t, hbits);
+  t->cache = NULL;
   return t;
 }
 
@@ -298,8 +299,8 @@ void lj_tab_resize(lua_State *L, GCtab *t, uint32_t asize, uint32_t hbits)
   }
   if (oldhmask > 0) {  /* Reinsert pairs from old hash part. */
     global_State *g;
-    uint32_t i;
-    for (i = 0; i <= oldhmask; i++) {
+    int i;
+    for (i = oldhmask; i >= 0; i--) {
       Node *n = &oldnode[i];
       if (!tvisnil(&n->val))
 	copyTV(L, lj_tab_set(L, t, &n->key), &n->val);
@@ -457,10 +458,72 @@ cTValue *lj_tab_get(lua_State *L, GCtab *t, cTValue *key)
 
 /* -- Table setters ------------------------------------------------------- */
 
+void lj_tab_prepare_cache(lua_State* L, GCtab* t) {
+	Cache* cache = (Cache*)lj_mem_new(L, sizeof(Cache));
+	cache->size = 0;
+	setmref(cache->head.next, NULL);
+	setmref(cache->current, &cache->head);
+
+	lua_assert(t->cache == NULL);
+	lua_assert(t->cacheHead == NULL);
+	t->cache = cache;
+}
+
+#define maxval(a, b) ((a) > (b) ? (a) : (b))
+
+void lj_tab_commit_cache(lua_State* L, GCtab* t) {
+	Cache* cache = t->cache;
+	Node* head;
+	lua_assert(cache != NULL);
+	t->cache = NULL;
+	/* printf("RESIZE : %d - %d = %d\n", cache->size, t->hmask + 1, hsize2hbits(maxval(cache->size, t->hmask + 1))); */
+	lj_tab_resize(L, t, t->asize, hsize2hbits(maxval(cache->size, t->hmask + 1)));
+	head = noderef(cache->head.next);
+	/*
+		printf("START COMMIT!!\n");
+		*/
+	while (head != NULL) {
+		Node* p = noderef(head->next);
+		TValue* v = NULL;
+		
+		/*
+		if (tvisstr(&head->key)) {
+			printf("COMMIT VALUE: %s\n", strdata(strV(&head->key)));
+		}*/
+
+		v = lj_tab_newkey(L, t, &head->key);
+		/*
+		if (tvisnil(&head->val) && tvisstr(&head->key)) {
+			printf("EMPTY VALUE FOR %s\n", strdata(strV(&head->key)));
+		}*/
+		*v = head->val;
+		lj_mem_freet(G(L), head);
+		head = p;
+	}
+
+	lj_mem_freet(G(L), cache);
+}
+
 /* Insert new key. Use Brent's variation to optimize the chain length. */
 TValue *lj_tab_newkey(lua_State *L, GCtab *t, cTValue *key)
 {
-  Node *n = hashkey(t, key);
+	Node* n;
+	if (t->cache != NULL) {
+		Node* p = (Node*)lj_mem_new(L, sizeof(Node));
+		setmref(p->next, NULL);
+		setmref(noderef(t->cache->current)->next, p);
+		setmref(t->cache->current, p);
+		setnilV(&p->val);
+		p->key = *key;
+		t->cache->size++;
+		/*
+		if (tvisstr(key)) {
+			printf("CACHED VALUE: %s\n", strdata(strV(key)));
+		}*/
+		return &p->val;
+	}
+
+  n = hashkey(t, key);
   if (!tvisnil(&n->val) || t->hmask == 0) {
     Node *nodebase = noderef(t->node);
     Node *collide, *freenode = getfreetop(t, nodebase);
@@ -485,6 +548,8 @@ TValue *lj_tab_newkey(lua_State *L, GCtab *t, cTValue *key)
       setmref(n->next, NULL);
       setnilV(&n->val);
       /* Rechain pseudo-resurrected string keys with colliding hashes. */
+	  /* printf("FIND POS = %p\n", n - nodebase); */
+	  /*
       while (nextnode(freenode)) {
 	Node *nn = nextnode(freenode);
 	if (tvisstr(&nn->key) && !tvisnil(&nn->val) &&
@@ -495,13 +560,23 @@ TValue *lj_tab_newkey(lua_State *L, GCtab *t, cTValue *key)
 	} else {
 	  freenode = nn;
 	}
-      }
+      }*/
     } else {  /* Otherwise use free node. */
       setmrefr(freenode->next, n->next);  /* Insert into chain. */
       setmref(n->next, freenode);
       n = freenode;
+	  /* printf("FREE POS = %p\n", n - nodebase); */
     }
+  }/* else {
+	printf("EMPTY POS = %p\n", n - noderef(t->node));
   }
+
+  
+  if (tvisstr(key)) {
+	  char buffer[64] = { 0 };
+	  strncpy(buffer, strdata(strV(key)), strV(key)->len > 63 ? 63 : strV(key)->len);
+	  printf("[%p]Location[%d][%x|%x] = STRING(%s)\n", t, n - noderef(t->node), strV(key)->hash, (strV(key)->hash & t->hmask), buffer);
+  }*/
   n->key.u64 = key->u64;
   if (LJ_UNLIKELY(tvismzero(&n->key)))
     n->key.u64 = 0;
@@ -664,3 +739,12 @@ MSize LJ_FASTCALL lj_tab_len(GCtab *t)
   return unbound_search(t, j);
 }
 
+MSize LJ_FASTCALL lj_tab_arraylen(GCtab *t)
+{
+  MSize j = (MSize)t->asize;
+  while (j > 1 && tvisnil(arrayslot(t, j - 1))) {
+    j--;
+  }
+  if (j) --j;
+  return j;
+}

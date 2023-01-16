@@ -1738,6 +1738,7 @@ static void expr_table(LexState *ls, ExpDesc *e)
 	t = lj_tab_new(fs->L, needarr ? narr : 0, hsize2hbits(nhash));
 	kidx = const_gc(fs, obj2gco(t), LJ_TTAB);
 	fs->bcbase[pc].ins = BCINS_AD(BC_TDUP, freg-1, kidx);
+	lj_tab_prepare_cache(fs->L, t);
       }
       vcall = 0;
       expr_kvalue(&k, &key);
@@ -1745,8 +1746,10 @@ static void expr_table(LexState *ls, ExpDesc *e)
       lj_gc_anybarriert(fs->L, t);
       if (expr_isk_nojump(&val)) {  /* Add const key/value to template table. */
 	expr_kvalue(v, &val);
+	
       } else {  /* Otherwise create dummy string key (avoids lj_tab_newkey). */
 	settabV(fs->L, v, t);  /* Preserve key with table itself as value. */
+	/* printf("IS EMPTY? %p = %d\n", v, tvisnil(v)); */
 	fixt = 1;   /* Fix this later, after all resizes. */
 	goto nonconst;
       }
@@ -1759,6 +1762,11 @@ static void expr_table(LexState *ls, ExpDesc *e)
     fs->freereg = freg;
     if (!lex_opt(ls, ',') && !lex_opt(ls, ';')) break;
   }
+
+  if (t) {
+	  lj_tab_commit_cache(fs->L, t);
+  }
+
   lex_match(ls, '}', '{', line);
   if (vcall) {
     BCInsLine *ilp = &fs->bcbase[fs->pc-1];
@@ -2674,10 +2682,90 @@ static int parse_stmt(LexState *ls)
 }
 
 /* A chunk is a list of statements optionally separated by semicolons. */
+
+static void add_argstmt(LexState* ls)
+{
+  ExpDesc e;
+
+  if (ls->fs->flags & PROTO_VARARG) {
+    var_new_lit(ls, 0, "arg");
+// nexps = expr_list(ls, &e);
+    {
+      synlevel_begin(ls);
+  // expr_unop(ls, &e);
+      {
+    // expr_simple(ls, v);
+        {
+      // expr_table(ls, v);
+          {
+            ExpDesc key, val;
+            FuncState *fs = ls->fs;
+            BCLine line = ls->linenumber;
+            BCInsLine *ilp;
+            BCIns *ip;
+            ExpDesc en;
+            BCReg base;
+
+            GCtab *t = NULL;
+            int vcall = 0, needarr = 0, fixt = 0;
+        uint32_t narr = 1;  /* First array index. */
+        uint32_t nhash = 0;  /* Number of hash entries. */
+            BCReg freg = fs->freereg;
+            BCPos pc = bcemit_AD(fs, BC_TNEW, freg, 0);
+            expr_init(&e, VNONRELOC, freg);
+            bcreg_reserve(fs, 1);
+            freg++;
+
+            vcall = 0;
+            expr_init(&key, VKNUM, 0);
+            setintV(&key.u.nval, (int)narr);
+            narr++;
+            needarr = vcall = 1;
+
+            // expr(ls, &val);
+            {
+              checkcond(ls, fs->flags & PROTO_VARARG, LJ_ERR_XDOTS);
+              bcreg_reserve(fs, 1);
+              base = fs->freereg-1;
+              expr_init(&val, VCALL, bcemit_ABC(fs, BC_VARG, base, 2, fs->numparams));
+              val.u.s.aux = base;
+            }
+
+            if (expr_isk(&key)) expr_index(fs, &e, &key);
+            bcemit_store(fs, &e, &val);
+            fs->freereg = freg;
+
+            ilp = &fs->bcbase[fs->pc-1];
+            expr_init(&en, VKNUM, 0);
+            en.u.nval.u32.lo = narr-1;
+        en.u.nval.u32.hi = 0x43300000;  /* Biased integer to avoid denormals. */
+            if (narr > 256) { fs->pc--; ilp--; }
+            ilp->ins = BCINS_AD(BC_TSETM, freg, const_num(fs, &en));
+            setbc_b(&ilp[-1].ins, 0);
+
+        e.k = VNONRELOC;  /* May have been changed by expr_index. */
+
+
+            ip = &fs->bcbase[pc].ins;
+            if (!needarr) narr = 0;
+            else if (narr < 3) narr = 3;
+            else if (narr > 0x7ff) narr = 0x7ff;
+            setbc_d(ip, narr|(hsize2hbits(nhash)<<11));
+          }
+        }
+      }
+      synlevel_end(ls);
+    }
+    assign_adjust(ls, 1, 1, &e);
+    var_add(ls, 1);
+  }  
+}
+
 static void parse_chunk(LexState *ls)
 {
   int islast = 0;
   synlevel_begin(ls);
+  add_argstmt(ls);
   while (!islast && !parse_isend(ls->tok)) {
     islast = parse_stmt(ls);
     lex_opt(ls, ';');

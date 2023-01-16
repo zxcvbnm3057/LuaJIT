@@ -398,15 +398,21 @@ LJLIB_PUSH(top-2) LJLIB_SET(!)  /* Set environment. */
 LJLIB_CF(io_open)
 {
   const char *fname = strdata(lj_lib_checkstr(L, 1));
-  GCstr *s = lj_lib_optstr(L, 2);
-  const char *mode = s ? strdata(s) : "r";
-  IOFileUD *iof = io_file_new(L);
+  GCstr *s = NULL;
+  const char *mode = NULL;
+  IOFileUD *iof = NULL;
+  //if (strstr(fname, "..") != NULL)
+	//  return 0;
+  s = lj_lib_optstr(L, 2);
+  mode = s ? strdata(s) : "rb";
+  iof = io_file_new(L);
   iof->fp = fopen(fname, mode);
   return iof->fp != NULL ? 1 : luaL_fileresult(L, 0, fname);
 }
 
 LJLIB_CF(io_popen)
 {
+	/*
 #if LJ_TARGET_POSIX || (LJ_TARGET_WINDOWS && !LJ_TARGET_XBOXONE)
   const char *fname = strdata(lj_lib_checkstr(L, 1));
   GCstr *s = lj_lib_optstr(L, 2);
@@ -422,7 +428,8 @@ LJLIB_CF(io_popen)
   return iof->fp != NULL ? 1 : luaL_fileresult(L, 0, fname);
 #else
   return luaL_error(L, LUA_QL("popen") " not supported");
-#endif
+#endif*/
+	return 0;
 }
 
 LJLIB_CF(io_tmpfile)

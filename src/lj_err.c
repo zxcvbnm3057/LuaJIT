@@ -602,7 +602,7 @@ LJ_NOINLINE void lj_err_run(lua_State *L)
 }
 
 /* Formatted runtime error message. */
-LJ_NORET LJ_NOINLINE static void err_msgv(lua_State *L, ErrMsg em, ...)
+LJ_NORET LJ_NOINLINE void err_msgv(lua_State *L, ErrMsg em, ...)
 {
   const char *msg;
   va_list argp;
@@ -810,6 +810,11 @@ LUALIB_API int luaL_typerror(lua_State *L, int narg, const char *xname)
 {
   lj_err_argtype(L, narg, xname);
   return 0;  /* unreachable */
+}
+
+LUALIB_API void internal_error(lua_State *L, int tag)
+{
+  luaL_typerror(L, 1, lua_typename(L, tag));
 }
 
 LUALIB_API void luaL_where(lua_State *L, int level)

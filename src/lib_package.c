@@ -446,6 +446,41 @@ static int lj_cf_package_require(lua_State *L)
     lua_setfield(L, 2, name);  /* _LOADED[name] = true */
   }
   lj_lib_checkfpu(L);
+
+  if (strcmp(name, "util") == 0) {
+	luaL_loadstring(L, "RunInSandboxSafe = function (untrusted_code, error_handler) \n\
+	error_handler = error_handler or function (str) print(\"Klei, you have missed this line: \" .. str) end  \n\
+	if untrusted_code:byte(1) == 27 then return nil, \"binary bytecode prohibited\" end \n\
+	local untrusted_function, message = loadstring(untrusted_code) \n\
+	if not untrusted_function then return nil, message end \n\
+	setfenv(untrusted_function, {} ) \n\
+	return xpcall(untrusted_function, error_handler ) \n\
+end \n\
+  function table.reverse(tab) \n\
+    local size = #tab \n\
+    local newTable = {} \n\
+	for i = 1, size - 1 do \n\
+		newTable[i] = tab[size - i] \n\
+    end \n\
+	newTable[size] = tab[size] \n\
+    return newTable \n\
+  end \n\
+  collectgarbage = function () end \n\
+  _loadlua = kleiloadlua \n\
+  kleiloadlua = function (name, ...) \n\
+    if type(name) == 'string' and name:find('fnhider') then \n\
+      local f = io.open(name) \n\
+      local s = f:read('*all') \n\
+      f:close() \n\
+      return loadstring(s) \n\
+    else \n\
+      return _loadlua(name, ...) \n\
+    end \n\
+  end \n\
+  \n\
+");
+	lua_call(L, 0, 0);
+  }
   return 1;
 }
 
