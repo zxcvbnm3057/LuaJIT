@@ -346,9 +346,14 @@ LUALIB_API lua_State *luaL_newstate(void)
 #if LJ_64
 LUA_API lua_State *lua_newstate(lua_Alloc f, void *ud)
 {
-  UNUSED(f); UNUSED(ud);
-  fputs("Must use luaL_newstate() for 64 bit target\n", stderr);
-  return NULL;
+  // lua_State *L;
+  // L = lj_state_newstate(lj_alloc_f, ud);
+  // if (L) G(L)->panic = panic;
+  // return L;
+  return luaL_newstate();
+  // UNUSED(f); UNUSED(ud);
+  // fputs("Must use luaL_newstate() for 64 bit target\n", stderr);
+  // return NULL;
 }
 #endif
 
