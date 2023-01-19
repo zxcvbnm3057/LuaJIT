@@ -656,22 +656,23 @@ typedef struct global_State {
 struct lua_State {
   union {
     struct {
-  GCHeader;
-  uint8_t dummy_ffid;	/* Fake FF_C for curr_funcisL() on dummy frames. */
-  uint8_t status;	/* Thread status. */
-  MRef glref;		/* Link to global state. */
-  GCRef gclist;		/* GC chain. */
-  TValue *base;		/* Base of currently executing function. */
-  TValue *top;		/* First free slot in the stack. */
-  MRef maxstack;	/* Last free slot in the stack. */
-  MRef stack;		/* Stack base. */
-  GCRef openupval;	/* List of open upvalues in the stack. */
-  GCRef env;		/* Thread environment (table of globals). */
-  void *cframe;		/* End of C stack frame chain. */
-  MSize stacksize;	/* True stack size (incl. LJ_STACK_EXTRA). */
-};
-  uint8_t reserved[0x180]; /* reserve for target */
-};
+      GCHeader;
+      uint8_t dummy_ffid;	/* Fake FF_C for curr_funcisL() on dummy frames. */
+      uint8_t status;	/* Thread status. */
+      MRef underlay; // 使MRef地址向后移动以与lua5.1中l_G对齐
+      GCRef gclist;		/* GC chain. */
+      MRef glref;		/* Link to global state. */
+      TValue *base;		/* Base of currently executing function. */
+      TValue *top;		/* First free slot in the stack. */
+      MRef maxstack;	/* Last free slot in the stack. */
+      MRef stack;		/* Stack base. */
+      GCRef openupval;	/* List of open upvalues in the stack. */
+      GCRef env;		/* Thread environment (table of globals). */
+      void *cframe;		/* End of C stack frame chain. */
+      MSize stacksize;	/* True stack size (incl. LJ_STACK_EXTRA). */
+    };
+    uint8_t reserved[0x180]; /* reserve for target */
+  };
 };
 
 #define G(L)			(mref(L->glref, global_State))
