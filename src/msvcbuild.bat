@@ -36,8 +36,7 @@ if exist minilua.exe.manifest^
 @minilua
 @if errorlevel 8 goto :X64
 @set DASMFLAGS=-D WIN -D JIT -D FFI
-@set LJARCH=x86
-@set LJCOMPILE=%LJCOMPILE% /arch:SSE2
+@set LJARCH=x64
 :X64
 minilua %DASM% -LN %DASMFLAGS% -o host\buildvm_arch.h vm_x86.dasc
 @if errorlevel 1 goto :BAD
@@ -91,15 +90,15 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 if exist %LJDLLNAME%.manifest^
   %LJMT% -manifest %LJDLLNAME%.manifest -outputresource:%LJDLLNAME%;2
 
-%LJCOMPILE% luajit.c
-@if errorlevel 1 goto :BAD
-%LJLINK% /out:luajit.exe luajit.obj %LJLIBNAME%
-@if errorlevel 1 goto :BAD
-if exist luajit.exe.manifest^
-  %LJMT% -manifest luajit.exe.manifest -outputresource:luajit.exe
+@REM %LJCOMPILE% luajit.c
+@REM @if errorlevel 1 goto :BAD
+@REM %LJLINK% /out:luajit.exe luajit.obj %LJLIBNAME%
+@REM @if errorlevel 1 goto :BAD
+@REM if exist luajit.exe.manifest^
+@REM   %LJMT% -manifest luajit.exe.manifest -outputresource:luajit.exe
 
-@del *.obj *.manifest minilua.exe buildvm.exe
-@echo.
+@REM @del *.obj *.manifest minilua.exe buildvm.exe
+@REM @echo.
 @echo === Successfully built LuaJIT for Windows/%LJARCH% ===
 
 @goto :END
