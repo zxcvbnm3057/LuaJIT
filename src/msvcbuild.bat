@@ -14,8 +14,15 @@
 @if not defined INCLUDE goto :FAIL
 
 @setlocal
-@set LJCOMPILE=cl /nologo /c /O2 /W3 /D_CRT_SECURE_NO_DEPRECATE
+@set LJCOMPILE=cl /nologo /c /W3 /D_CRT_SECURE_NO_DEPRECATE
 @set LJLINK=link /nologo
+@if "%1" == "debug" (
+  @set LJCOMPILE=%LJCOMPILE% /Od
+  @set LJLINK=%LJLINK% /ASSEMBLYDEBUG
+) else (
+  @set LJCOMPILE=%LJCOMPILE% /O2
+  @set LJLINK=%LJLINK% /ASSEMBLYDEBUG
+)
 @set LJMT=mt /nologo
 @set LJLIB=lib /nologo /nodefaultlib
 @set DASMDIR=..\dynasm
